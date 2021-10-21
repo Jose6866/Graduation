@@ -1,0 +1,9 @@
+float64 depth_x
+float64 depth_y
+float64 depth_w
+float64 depth_h
+string depth_label
+float64 depth_conf
+float64 depth_center_x
+float64 depth_center_y
+float64 depth_depth

@@ -1,0 +1,8 @@
+float64 detection_x
+float64 detection_y
+float64 detection_w
+float64 detection_h
+string detection_label
+float64 detection_conf
+float64 detection_center_x
+float64 detection_center_y
