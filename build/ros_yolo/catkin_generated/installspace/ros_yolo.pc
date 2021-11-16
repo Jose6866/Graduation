@@ -1,0 +1,8 @@
+prefix=/home/cilab/project/install
+
+Name: ros_yolo
+Description: Description of ros_yolo
+Version: 0.0.0
+Cflags: -I${prefix}/include
+Libs: -L${prefix}/lib -lros_yolo
+Requires: message_runtime roscpp rospy sensor_msgs std_msgs

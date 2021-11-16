@@ -1,0 +1,2 @@
+realsense2_camera:realsense2_description:ros_yolo
+-DCATKIN_DEVEL_PREFIX=/home/cilab/project/devel -DCMAKE_INSTALL_PREFIX=/home/cilab/project/install -G Unix Makefiles
