@@ -55,6 +55,29 @@ def exif_size(img):
 
     return s
 
+def exif_transpose(image):
+    """
+    Transpose a PIL image accordingly if it has an EXIF Orientation tag.
+    Inplace version of https://github.com/python-pillow/Pillow/blob/master/src/PIL/ImageOps.py exif_transpose()
+    :param image: The image to transpose.
+    :return: An image.
+    """
+    exif = image.getexif()
+    orientation = exif.get(0x0112, 1)  # default 1
+    if orientation > 1:
+        method = {2: Image.FLIP_LEFT_RIGHT,
+                  3: Image.ROTATE_180,
+                  4: Image.FLIP_TOP_BOTTOM,
+                  5: Image.TRANSPOSE,
+                  6: Image.ROTATE_270,
+                  7: Image.TRANSVERSE,
+                  8: Image.ROTATE_90,
+                  }.get(orientation)
+        if method is not None:
+            image = image.transpose(method)
+            del exif[0x0112]
+            image.info["exif"] = exif.tobytes()
+    return image
 
 def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False,
                       rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix=''):
@@ -120,7 +143,7 @@ class _RepeatSampler(object):
 
 
 class LoadImages:  # for inference
-    def __init__(self, path, img_size=640, stride=32):
+    def __init__(self, path, img_size=320, stride=32):
         p = str(Path(path).absolute())  # os-agnostic absolute path
         if '*' in p:
             files = sorted(glob.glob(p, recursive=True))  # glob
@@ -200,7 +223,7 @@ class LoadImages:  # for inference
 
 
 class LoadWebcam:  # for inference
-    def __init__(self, pipe='0', img_size=640, stride=32):
+    def __init__(self, pipe='0', img_size=320, stride=32):
         self.img_size = img_size
         self.stride = stride
 
@@ -258,7 +281,7 @@ class LoadWebcam:  # for inference
 
 
 class LoadStreams:  # multiple IP or RTSP cameras
-    def __init__(self, sources='streams.txt', img_size=640, stride=32):
+    def __init__(self, sources='streams.txt', img_size=320, stride=32):
         self.mode = 'stream'
         self.img_size = img_size
         self.stride = stride
@@ -345,7 +368,7 @@ def img2label_paths(img_paths):
 
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
-    def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
+    def __init__(self, path, img_size=320, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
                  cache_images=False, single_cls=False, stride=32, pad=0.0, prefix=''):
         self.img_size = img_size
         self.augment = augment
@@ -818,7 +841,7 @@ def replicate(img, labels):
     return img, labels
 
 
-def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
+def letterbox(img, new_shape=(320, 320), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
     # Resize and pad image while meeting stride-multiple constraints
     shape = img.shape[:2]  # current shape [height, width]
     if isinstance(new_shape, int):

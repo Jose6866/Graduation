@@ -71,40 +71,51 @@ class PublishThread(threading.Thread):
         self.depth_depth = data.depth_depth
 
     def run(self):
+        rate = rospy.Rate(3) #3Hz
         twist = Twist()
-        check = True
-        while True and check:  #person을 방향으로 정
-            twist.linear.x = 0.01
-            twist.linear.z = 0.05
-            twist.angular.z = 0.05
+        find = True
+        depth_person = 0.0
+        twist.linear.x = 0.0 #정면방향속력,방향
+        twist.angular.z = 0.0 #회전속력,방향
 
-            if self.depth_label == 'Person':
-                if self.depth_center_x == self.true_center_x:
-                    twist.linear.z = 0.0
+        while find:
+            twist.angular.z = 0.2
+            if self.depth_label == "person":
+                if 550.0 < self.depth_center_x < 730.0:
+                   twist.angular.z = 0.0
+                   find = False
+            self.publisher.publish(twist)
+            rate.sleep()
+
+        while True:
+            if self.depth_label == "person":
+                twist.linear.x = 0.05
+                depth_person = self.depth_depth
+                if self.depth_center_x < self.true_center_x:
+                    twist.angular.z = 0.1
+                elif self.depth_center_x > self.true_center_x:
+                    twist.angular.z = -0.1
+                else:
                     twist.angular.z = 0.0
-                    check = False
+            elif self.depth_label == "obstacle":
+                twist.linear.x = 0.05
+                if self.depth_depth < depth_person:
+                    if self.depth_center_x < self.true_center_x:
+                        twist.angular.z = -0.7
+                    else:
+                        twist.angular.z = 0.7
+                else:
+                    pass
+            else:
+                twist.linear.x = 0.0
+                twist.angular.z = 0.2
+
             self.publisher.publish(twist)
+            rate.sleep()
 
-
-#        while True:
-#            # Wait for a new message or timeout.
-#            twist.linear.x = 0.01
-#            twist.linear.z = 0.01
-#            twist.angular.z = 0.05
-
-#            if self.detection_center_x > self.true_center_x : # center보다 오른쪽에 있으면 뒤로
-#                twist.angular.z = -0.05
-#                print('%s is on right' % self.detection_label, end='\n')
-#            elif self.detection_center_x < self.true_center_x : #center보다 왼쪽에 있으면 앞으로
-#                twist.angular.z = 0.05
-#                print('%s is on left' % self.detection_label, end='\n')
-#            else:
-#                twist.angular.z = 0.00
-
-            # Publish.
-            self.publisher.publish(twist)
 
 if __name__=="__main__":
     rospy.init_node('yolo_controller')
     repeat = rospy.get_param("~repeat_rate", 0.0)
     pub_thread = PublishThread(repeat)
+

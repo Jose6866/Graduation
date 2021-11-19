@@ -44,6 +44,11 @@ def init_torch_seeds(seed=0):
     else:  # faster, less reproducible
         cudnn.benchmark, cudnn.deterministic = True, False
 
+def time_sync():
+    # pytorch-accurate time
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+    return time.time()
 
 def date_modified(path=__file__):
     # return human-readable file modification date, i.e. '2021-3-26'
@@ -201,7 +206,7 @@ def fuse_conv_and_bn(conv, bn):
     return fusedconv
 
 
-def model_info(model, verbose=False, img_size=640):
+def model_info(model, verbose=False, img_size=320):
     # Model information. img_size may be int or list, i.e. img_size=640 or img_size=[640, 320]
     n_p = sum(x.numel() for x in model.parameters())  # number parameters
     n_g = sum(x.numel() for x in model.parameters() if x.requires_grad)  # number gradients

@@ -14,7 +14,7 @@ sys.path.append(Path(__file__).parent.parent.absolute().__str__())  # to run '$ 
 import torch
 import torch.nn as nn
 from torch.utils.mobile_optimizer import optimize_for_mobile
-
+import os
 import models
 from models.experimental import attempt_load
 from utils.activations import Hardswish, SiLU
@@ -23,8 +23,8 @@ from utils.torch_utils import select_device
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', type=str, default='./yolov5s.pt', help='weights path')
-    parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='image size')  # height, width
+    parser.add_argument('--weights', type=str, default=os.path.realpath('/home/cilab/project/yolov5smaller_v3.pt'), help='weights path')
+    parser.add_argument('--img-size', nargs='+', type=int, default=[320, 320], help='image size')  # height, width
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
     parser.add_argument('--device', default='cpu', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--half', action='store_true', help='FP16 half-precision export')

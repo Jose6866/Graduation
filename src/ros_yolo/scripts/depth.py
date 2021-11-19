@@ -82,6 +82,7 @@ class PublishThread(threading.Thread):
 
     def run(self):
         depth0 = Depth()
+        rate = rospy.Rate(3) #3Hz
 
         while True:
             depth0.depth_x = self.detection_x
@@ -96,6 +97,7 @@ class PublishThread(threading.Thread):
 
             # Publish.
             self.publisher.publish(depth0)
+            rate.sleep()
 
 
 if __name__=="__main__":

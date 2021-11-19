@@ -3,6 +3,7 @@
 import argparse
 import logging
 import sys
+
 from copy import deepcopy
 from pathlib import Path
 
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 from models.common import *
 from models.experimental import *
 from utils.autoanchor import check_anchor_order
-from utils.general import make_divisible, check_file, set_logging
+from utils.general import make_divisible, check_file, set_logging, check_version
 from utils.torch_utils import time_synchronized, fuse_conv_and_bn, model_info, scale_img, initialize_weights, \
     select_device, copy_attr
 
@@ -21,26 +22,23 @@ try:
 except ImportError:
     thop = None
 
-
 class Detect(nn.Module):
     stride = None  # strides computed during build
     onnx_dynamic = False  # ONNX export parameter
 
     def __init__(self, nc=80, anchors=(), ch=(), inplace=True):  # detection layer
-        super(Detect, self).__init__()
+        super().__init__()
         self.nc = nc  # number of classes
         self.no = nc + 5  # number of outputs per anchor
         self.nl = len(anchors)  # number of detection layers
         self.na = len(anchors[0]) // 2  # number of anchors
         self.grid = [torch.zeros(1)] * self.nl  # init grid
-        a = torch.tensor(anchors).float().view(self.nl, -1, 2)
-        self.register_buffer('anchors', a)  # shape(nl,na,2)
-        self.register_buffer('anchor_grid', a.clone().view(self.nl, 1, -1, 1, 1, 2))  # shape(nl,1,na,1,1,2)
+        self.anchor_grid = [torch.zeros(1)] * self.nl  # init anchor grid
+        self.register_buffer('anchors', torch.tensor(anchors).float().view(self.nl, -1, 2))  # shape(nl,na,2)
         self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
         self.inplace = inplace  # use in-place ops (e.g. slice assignment)
 
     def forward(self, x):
-        # x = x.copy()  # for profiling
         z = []  # inference output
         for i in range(self.nl):
             x[i] = self.m[i](x[i])  # conv
@@ -48,29 +46,35 @@ class Detect(nn.Module):
             x[i] = x[i].view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
 
             if not self.training:  # inference
-                if self.grid[i].shape[2:4] != x[i].shape[2:4] or self.onnx_dynamic:
-                    self.grid[i] = self._make_grid(nx, ny).to(x[i].device)
+                if self.onnx_dynamic or self.grid[i].shape[2:4] != x[i].shape[2:4]:
+                    self.grid[i], self.anchor_grid[i] = self._make_grid(nx, ny, i)
 
                 y = x[i].sigmoid()
                 if self.inplace:
-                    y[..., 0:2] = (y[..., 0:2] * 2. - 0.5 + self.grid[i]) * self.stride[i]  # xy
+                    y[..., 0:2] = (y[..., 0:2] * 2 - 0.5 + self.grid[i]) * self.stride[i]  # xy
                     y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
                 else:  # for YOLOv5 on AWS Inferentia https://github.com/ultralytics/yolov5/pull/2953
-                    xy = (y[..., 0:2] * 2. - 0.5 + self.grid[i]) * self.stride[i]  # xy
-                    wh = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i].view(1, self.na, 1, 1, 2)  # wh
+                    xy = (y[..., 0:2] * 2 - 0.5 + self.grid[i]) * self.stride[i]  # xy
+                    wh = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
                     y = torch.cat((xy, wh, y[..., 4:]), -1)
                 z.append(y.view(bs, -1, self.no))
 
         return x if self.training else (torch.cat(z, 1), x)
 
-    @staticmethod
-    def _make_grid(nx=20, ny=20):
-        yv, xv = torch.meshgrid([torch.arange(ny), torch.arange(nx)])
-        return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
+    def _make_grid(self, nx=20, ny=20, i=0):
+        d = self.anchors[i].device
+        if check_version(torch.__version__, '1.10.0'):  # torch>=1.10.0 meshgrid workaround for torch>=0.7 compatibility
+            yv, xv = torch.meshgrid([torch.arange(ny).to(d), torch.arange(nx).to(d)], indexing='ij')
+        else:
+            yv, xv = torch.meshgrid([torch.arange(ny).to(d), torch.arange(nx).to(d)])
+        grid = torch.stack((xv, yv), 2).expand((1, self.na, ny, nx, 2)).float()
+        anchor_grid = (self.anchors[i].clone() * self.stride[i]) \
+            .view((1, self.na, 1, 1, 2)).expand((1, self.na, ny, nx, 2)).float()
+        return grid, anchor_grid
 
 
 class Model(nn.Module):
-    def __init__(self, cfg='yolov5s.yaml', ch=3, nc=None, anchors=None):  # model, input channels, number of classes
+    def __init__(self, cfg='yolov5smaller_v3.yaml', ch=3, nc=None, anchors=None):  # model, input channels, number of classes
         super(Model, self).__init__()
         if isinstance(cfg, dict):
             self.yaml = cfg  # model dict
@@ -175,7 +179,7 @@ class Model(nn.Module):
         m = self.model[-1]  # Detect() module
         for mi, s in zip(m.m, m.stride):  # from
             b = mi.bias.view(m.na, -1)  # conv.bias(255) to (3,85)
-            b.data[:, 4] += math.log(8 / (640 / s) ** 2)  # obj (8 objects per 640 image)
+            b.data[:, 4] += math.log(8 / (320 / s) ** 2)  # obj (8 objects per 640 image)
             b.data[:, 5:] += math.log(0.6 / (m.nc - 0.99)) if cf is None else torch.log(cf / cf.sum())  # cls
             mi.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
 
@@ -221,7 +225,7 @@ class Model(nn.Module):
         copy_attr(m, self, include=('yaml', 'nc', 'hyp', 'names', 'stride'), exclude=())  # copy attributes
         return m
 
-    def info(self, verbose=False, img_size=640):  # print model information
+    def info(self, verbose=False, img_size=320):  # print model information
         model_info(self, verbose, img_size)
 
 
@@ -281,7 +285,7 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, default='yolov5s.yaml', help='model.yaml')
+    parser.add_argument('--cfg', type=str, default='yolov5smaller_v3.yaml', help='model.yaml')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     opt = parser.parse_args()
     opt.cfg = check_file(opt.cfg)  # check file

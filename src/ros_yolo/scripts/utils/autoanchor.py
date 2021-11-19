@@ -19,7 +19,7 @@ def check_anchor_order(m):
         m.anchor_grid[:] = m.anchor_grid.flip(0)
 
 
-def check_anchors(dataset, model, thr=4.0, imgsz=640):
+def check_anchors(dataset, model, thr=4.0, imgsz=320):
     # Check anchor fit to data, recompute if necessary
     prefix = colorstr('autoanchor: ')
     print(f'\n{prefix}Analyzing anchors... ', end='')
@@ -58,7 +58,7 @@ def check_anchors(dataset, model, thr=4.0, imgsz=640):
     print('')  # newline
 
 
-def kmean_anchors(path='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen=1000, verbose=True):
+def kmean_anchors(path='./data/coco128.yaml', n=9, img_size=320, thr=4.0, gen=1000, verbose=True):
     """ Creates kmeans-evolved anchors from training dataset
 
         Arguments:

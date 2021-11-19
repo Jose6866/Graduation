@@ -35,7 +35,7 @@ from utils.torch_utils import select_device, load_classifier, time_synchronized
 ros_image=0
 
 
-def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True):
+def letterbox(img, new_shape=(320, 320), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True):
     # Resize image to a 32-pixel-multiple rectangle https://github.com/ultralytics/yolov3/issues/232
     shape = img.shape[:2]  # current shape [height, width]
     if isinstance(new_shape, int):
@@ -68,7 +68,7 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
     return img, ratio, (dw, dh)
 
 def loadimg(img):  # opencv
-    img_size=640
+    img_size=320
     cap=None
     path=None
     img0 = img
@@ -132,7 +132,11 @@ def detect(img):
                     line = (cls, conf, *xywh) if save_conf else (cls, *xywh)  # label format
 
                 if view_img:  # Add bbox to image
-                    label = '%s %.2f' % (names[int(cls)], conf)
+                    label = '%s' % (names[int(cls)])
+                    if label == "person":
+                        pass
+                    else:
+                        label = "obstacle"
                     plot_one_box(xyxy, im0, label=label, color=[0,255,0], line_thickness=3)
                     c1, c2 = (int(xyxy[0]),int(xyxy[1])), (int(xyxy[2]),int(xyxy[3])) #center_point 찾
                     center_x = round((c1[0]+c2[0])/2)
@@ -153,12 +157,12 @@ def detect(img):
 
     out_img = im0[:, :, [2, 1, 0]]
     ros_image=out_img
-#    cv2.namedWindow('YOLOV5')
-#    cv2.imshow('YOLOV5', out_img)
-#    a  = cv2.waitKey(1)
-#
-#    #### Create CompressedIamge ####
-#    publish_image(im0)
+    cv2.namedWindow('YOLOV5')
+    cv2.imshow('YOLOV5', out_img)
+    a  = cv2.waitKey(1)
+
+    #### Create CompressedIamge ####
+    publish_image(im0)
 
 def image_callback_1(image):
     global ros_image
@@ -166,17 +170,17 @@ def image_callback_1(image):
     with torch.no_grad():
         detect(ros_image)
 
-#def publish_image(imgdata):
-#    image_temp=Image()
-#    header = Header(stamp=rospy.Time.now())
-#    header.frame_id = 'map'
-#    image_temp.height=IMAGE_HEIGHT
-#    image_temp.width=IMAGE_WIDTH
-#    image_temp.encoding='rgb8'
-#    image_temp.data=np.array(imgdata).tostring()
-#    image_temp.header=header
-#    image_temp.step=1241*3
-#    image_pub.publish(image_temp)
+def publish_image(imgdata):
+    image_temp=Image()
+    header = Header(stamp=rospy.Time.now())
+    header.frame_id = 'map'
+    image_temp.height=IMAGE_HEIGHT
+    image_temp.width=IMAGE_WIDTH
+    image_temp.encoding='rgb8'
+    image_temp.data=np.array(imgdata).tostring()
+    image_temp.header=header
+    image_temp.step=1241*3
+    image_pub.publish(image_temp)
     
 
 if __name__ == '__main__':
@@ -185,8 +189,8 @@ if __name__ == '__main__':
     device = ''
     device = select_device(device)
     half = device.type != 'cpu'  # half precision only supported on CUDA
-    weights = 'yolov5s.pt'
-    imgsz = 640
+    weights = os.path.realpath('/home/cilab/project/yolov5smaller_v3.pt')
+    imgsz = 320
     model = attempt_load(weights, map_location=device)  # load FP32 model
 
     imgsz = check_img_size(imgsz, s=model.stride.max())  # check img_size
@@ -194,10 +198,10 @@ if __name__ == '__main__':
         model.half()  # to FP16
 
     rospy.init_node('ros_yolo')
-    image_topic_1 = "camera/color/image_raw"
+    image_topic_1 = "/image_raw"
 
     rospy.Subscriber(image_topic_1, Image, image_callback_1, queue_size=1, buff_size=52428800)
-#    image_pub = rospy.Publisher('/yolo_result_out', Image, queue_size=1)
+    image_pub = rospy.Publisher('/yolo_result_out', Image, queue_size=1)
 
     detection_pub = rospy.Publisher('Detection', Detection , queue_size = 1)
     

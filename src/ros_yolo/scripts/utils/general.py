@@ -24,6 +24,8 @@ from utils.google_utils import gsutil_getsize
 from utils.metrics import fitness
 from utils.torch_utils import init_torch_seeds
 
+import pkg_resources as pkg
+
 # Settings
 torch.set_printoptions(linewidth=320, precision=5, profile='long')
 np.set_printoptions(linewidth=320, formatter={'float_kind': '{:11.5g}'.format})  # format short g, %precision=5
@@ -84,6 +86,14 @@ def check_online():
     except OSError:
         return False
 
+def check_version(current='0.0.0', minimum='0.0.0', name='version ', pinned=False, hard=False):
+    # Check version vs. required version
+    current, minimum = (pkg.parse_version(x) for x in (current, minimum))
+    result = (current == minimum) if pinned else (current >= minimum)  # bool
+    if hard:  # assert min requirements met
+        assert result, f'{name}{minimum} required by YOLOv5, but {name}{current} is currently installed'
+    else:
+        return result
 
 def check_git_status():
     # Recommend 'git pull' if code is out of date
@@ -325,7 +335,7 @@ def xywh2xyxy(x):
     return y
 
 
-def xywhn2xyxy(x, w=640, h=640, padw=0, padh=0):
+def xywhn2xyxy(x, w=320, h=320, padw=0, padh=0):
     # Convert nx4 boxes from [x, y, w, h] normalized to [x1, y1, x2, y2] where xy1=top-left, xy2=bottom-right
     y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
     y[:, 0] = w * (x[:, 0] - x[:, 2] / 2) + padw  # top left x
@@ -335,7 +345,7 @@ def xywhn2xyxy(x, w=640, h=640, padw=0, padh=0):
     return y
 
 
-def xyn2xy(x, w=640, h=640, padw=0, padh=0):
+def xyn2xy(x, w=320, h=320, padw=0, padh=0):
     # Convert normalized segments into pixel segments, shape (n,2)
     y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
     y[:, 0] = w * x[:, 0] + padw  # top left x
@@ -343,7 +353,7 @@ def xyn2xy(x, w=640, h=640, padw=0, padh=0):
     return y
 
 
-def segment2box(segment, width=640, height=640):
+def segment2box(segment, width=320, height=320):
     # Convert 1 segment label to 1 box label, applying inside-image constraint, i.e. (xy1, xy2, ...) to (xyxy)
     x, y = segment.T  # segment xy
     inside = (x >= 0) & (y >= 0) & (x <= width) & (y <= height)
@@ -384,6 +394,31 @@ def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
     clip_coords(coords, img0_shape)
     return coords
 
+def is_writeable(dir, test=False):
+    # Return True if directory has write permissions, test opening a file with write permissions if test=True
+    if test:  # method 1
+        file = Path(dir) / 'tmp.txt'
+        try:
+            with open(file, 'w'):  # open file with write permissions
+                pass
+            file.unlink()  # remove file
+            return True
+        except OSError:
+            return False
+    else:  # method 2
+        return os.access(dir, os.R_OK)  # possible issues on Windows
+
+def user_config_dir(dir='Ultralytics', env_var='YOLOV5_CONFIG_DIR'):
+    # Return path of user configuration directory. Prefer environment variable if exists. Make dir if required.
+    env = os.getenv(env_var)
+    if env:
+        path = Path(env)  # use environment variable
+    else:
+        cfg = {'Windows': 'AppData/Roaming', 'Linux': '.config', 'Darwin': 'Library/Application Support'}  # 3 OS dirs
+        path = Path.home() / cfg.get(platform.system(), '')  # OS-specific config dir
+        path = (path if is_writeable(path) else Path('/tmp')) / dir  # GCP and AWS lambda fix, only /tmp is writeable
+    path.mkdir(exist_ok=True)  # make if required
+    return path
 
 def clip_coords(boxes, img_shape):
     # Clip bounding xyxy bounding boxes to image shape (height, width)
@@ -734,7 +769,7 @@ def plot_wh_methods():  # from utils.general import *; plot_wh_methods()
     fig.savefig('comparison.png', dpi=200)
 
 
-def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max_size=640, max_subplots=16):
+def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max_size=320, max_subplots=16):
     tl = 3  # line thickness
     tf = max(tl - 1, 1)  # font thickness
 
