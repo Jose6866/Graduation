@@ -1,28 +1,28 @@
-terminal1:
+terminal 1:
 cd project
 catkin_make
 roscore
 
-terminal2:
+terminal 2:
 roslaunch realsense2_camera rs_camera.launch align_depth:=true
 
-terminal3:
+terminal 3:
 rosrun topic_tools throttle messages /camera/color/image_raw 3.0 /image_raw
 
-terminal4:
+terminal 4:
 sudo rmmod asus_nb_wmi
 conda activate py38
 rosrun ros_yolo final_yolo.py
 
-terminal5:
+terminal 5:
 conda activate py27
 rosrun ros_yolo depth.py
 
-terminal6:
+terminal 6:
 sudo usermod -a -G dialout $USER
 rosrun kobuki_ftdi create_udev_rules  #쓰고서 꼬부기 usb 다시 연결
 roslaunch kobuki_node minimal.launch --screen
 
-terminal7:
+terminal 7:
 rosrun ros_yolo controller.py /cmd_vel:=/mobile_base/commands/velocity
 
